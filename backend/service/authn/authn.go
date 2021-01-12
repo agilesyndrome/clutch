@@ -232,6 +232,9 @@ type oidcProviderClaims struct {
 }
 
 func (pc *oidcProviderClaims) Check(grantType string) error {
+	if pc.GrantTypesSupported == nil {
+		return nil
+	}
 	for _, gt := range pc.GrantTypesSupported {
 		if gt == grantType {
 			return nil
