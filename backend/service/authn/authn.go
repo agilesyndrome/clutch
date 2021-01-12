@@ -26,9 +26,8 @@ import (
 	"github.com/lyft/clutch/backend/service"
 )
 
-// TODO(maybe): make scopes part of config?
 // For more documentation on scopes see: https://developer.okta.com/docs/reference/api/oidc/#scopes
-var scopes = []string{
+var defaultScopes = []string{
 	oidc.ScopeOpenID,
 	oidc.ScopeOfflineAccess, // offline_access is used to request issuance of a refresh_token
 	"email",
@@ -177,7 +176,9 @@ func (p *OIDCProvider) Exchange(ctx context.Context, code string) (*oauth2.Token
 
 // Intermediate claims object for the ID token. Based on what scopes were requested.
 type idClaims struct {
+	Subject string `json:"sub"`
 	Email string `json:"email"`
+	CognitoUser string `json:"cognito:username"`
 }
 
 func oidcTokenToStandardClaims(t *oidc.IDToken) *jwt.StandardClaims {
@@ -198,12 +199,16 @@ func DefaultClaimsFromOIDCToken(ctx context.Context, t *oidc.IDToken) (*Claims, 
 	if err := t.Claims(idc); err != nil {
 		return nil, err
 	}
-	if idc.Email == "" {
-		return nil, errors.New("claims did not deserialize with desired fields")
-	}
-
+	
 	sc := oidcTokenToStandardClaims(t)
-	sc.Subject = idc.Email
+
+	if len(idc.CognitoUser) > 0 {
+		sc.Subject = idc.CognitoUser
+	} else {
+		sc.S
+	}
+	sc.Subject = idc.CognitoUser
+
 	return &Claims{
 		StandardClaims: sc,
 		Groups:         []string{""},
@@ -232,6 +237,8 @@ type oidcProviderClaims struct {
 }
 
 func (pc *oidcProviderClaims) Check(grantType string) error {
+	// grant_types_supported is an option OIDC field
+	// don't fail if missing
 	if pc.GrantTypesSupported == nil {
 		return nil
 	}
@@ -262,7 +269,12 @@ func NewProvider(config *authnv1.Config) (Provider, error) {
 		ClientSecret: c.ClientSecret,
 		Endpoint:     provider.Endpoint(),
 		RedirectURL:  c.RedirectUrl,
-		Scopes:       scopes,
+	}
+
+	if len(c.Scopes) == 0 {
+		oc.Scopes = defaultScopes
+	} else {
+		oc.Scopes = c.Scopes
 	}
 
 	// Verify the provider implements the same flow we do.
