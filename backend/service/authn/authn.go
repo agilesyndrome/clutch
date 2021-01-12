@@ -271,7 +271,7 @@ func NewProvider(config *authnv1.Config) (Provider, error) {
 		return nil, err
 	}
 	if err := pClaims.Check("authorization_code"); err != nil {
-		logger.Warn("OIDC .well-known configuration does not list authorization_code as supported_grant_type", err)
+		return nil, err
 	}
 
 	p := &OIDCProvider{
